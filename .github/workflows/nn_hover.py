@@ -40,19 +40,43 @@ while time.time() < deadline:
 if not ok:
     fail("no position estimate")
 
+# pre-flight checks need time to clear after the estimate appears: retry arming
 print("arming...", flush=True)
-m.mav.command_long_send(m.target_system, m.target_component,
-                        mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0, 1, 0, 0, 0, 0, 0, 0)
-ack = m.recv_match(type="COMMAND_ACK", blocking=True, timeout=10)
-if not ack or ack.result != 0:
-    fail(f"arm rejected: {ack}")
+deadline = time.time() + 90
+armed = False
+while time.time() < deadline and not armed:
+    m.mav.command_long_send(m.target_system, m.target_component,
+                            mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0, 1, 0, 0, 0, 0, 0, 0)
+    end = time.time() + 3
+    while time.time() < end:
+        ack = m.recv_match(type="COMMAND_ACK", blocking=True, timeout=3)
+        if ack and ack.command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM:
+            if ack.result == 0:
+                armed = True
+            break
+    if not armed:
+        time.sleep(2)
+if not armed:
+    fail("arm never accepted within 90 s")
+print("armed", flush=True)
 
 print("takeoff...", flush=True)
-m.mav.command_long_send(m.target_system, m.target_component,
-                        mavutil.mavlink.MAV_CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0, 0, 2.5)
-ack = m.recv_match(type="COMMAND_ACK", blocking=True, timeout=10)
-if not ack or ack.result != 0:
-    fail(f"takeoff rejected: {ack}")
+deadline = time.time() + 30
+off = False
+while time.time() < deadline and not off:
+    m.mav.command_long_send(m.target_system, m.target_component,
+                            mavutil.mavlink.MAV_CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0, 0, 2.5)
+    end = time.time() + 3
+    while time.time() < end:
+        ack = m.recv_match(type="COMMAND_ACK", blocking=True, timeout=3)
+        if ack and ack.command == mavutil.mavlink.MAV_CMD_NAV_TAKEOFF:
+            if ack.result == 0:
+                off = True
+            break
+    if not off:
+        time.sleep(1)
+if not off:
+    fail("takeoff never accepted within 30 s")
 
 # require a stable hover: altitude within 1 m of 2.5 m for 30 continuous seconds
 print("watching hover...", flush=True)
