@@ -23,12 +23,6 @@ jobs:
       - name: Configure Git Safe Directory
         run: git config --system --add safe.directory '*'
 
-      - name: Build neural SITL
-        run: make px4_sitl_neural
-
-      - name: Install flight dependencies
-        run: pip3 install --break-system-packages pymavlink pyulog || pip3 install pymavlink pyulog
-
       - name: Install gazebo runtime
         shell: bash
         run: |
@@ -41,6 +35,12 @@ jobs:
             apt-get install -y gz-harmonic
           fi
           gz sim --versions
+
+      - name: Build neural SITL
+        run: make px4_sitl_neural
+
+      - name: Install flight dependencies
+        run: pip3 install --break-system-packages pymavlink pyulog || pip3 install pymavlink pyulog
 
       - name: Fly headless gazebo hover with the NN controller
         shell: bash
