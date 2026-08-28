@@ -67,7 +67,9 @@ jobs:
           u = ULog('nn_hover.ulg')
           p = u.initial_parameters
           print('MC_NN_EN in log:', p.get('MC_NN_EN'))
-          print('topics:', sorted({d.name for d in u.data_list}))
+          names = {d.name for d in u.data_list}
+          print('neural_control topic in log:', 'neural_control' in names)
+          print('topics:', sorted(names))
           "
           fi
 

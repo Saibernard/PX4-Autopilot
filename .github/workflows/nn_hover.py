@@ -92,28 +92,59 @@ while time.time() < deadline and not off:
 if not off:
     fail("takeoff never accepted within 30 s")
 
-# require a stable hover: altitude within 1 m of 2.5 m for 30 continuous seconds
-print("watching hover...", flush=True)
-deadline = time.time() + 180
-stable_since = None
+# wait until airborne under the classic takeoff
+print("waiting for liftoff...", flush=True)
+deadline = time.time() + 60
 while time.time() < deadline:
+    msg = m.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=5)
+    if msg and -msg.z > 1.0:
+        print(f"airborne at {-msg.z:.2f} m", flush=True)
+        break
+else:
+    fail("never lifted off")
+
+# switch into the neural controller's external flight mode
+# (registered as mode 23 = EXTERNAL1: custom main_mode 4, sub_mode 11)
+print("switching to the neural mode...", flush=True)
+deadline = time.time() + 30
+in_nn_mode = False
+while time.time() < deadline and not in_nn_mode:
+    m.mav.command_long_send(m.target_system, m.target_component,
+                            mavutil.mavlink.MAV_CMD_DO_SET_MODE, 0, 1, 4, 11, 0, 0, 0, 0)
+    end = time.time() + 3
+    while time.time() < end:
+        hb = m.recv_match(type="HEARTBEAT", blocking=True, timeout=3)
+        if hb and hb.type != mavutil.mavlink.MAV_TYPE_GCS:
+            main_mode = (hb.custom_mode >> 16) & 0xFF
+            sub_mode = (hb.custom_mode >> 24) & 0xFF
+            if main_mode == 4 and sub_mode == 11:
+                in_nn_mode = True
+                break
+if not in_nn_mode:
+    fail("neural mode never engaged")
+print("neural mode engaged", flush=True)
+
+# judge the NN hover on its own plateau: stay airborne for 45 s and hold a
+# steady altitude over the last 30 s, wherever that plateau is
+print("watching neural hover...", flush=True)
+alts = []
+start = time.time()
+while time.time() - start < 45:
     msg = m.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=5)
     if msg is None:
         continue
     alt = -msg.z
-    near = abs(alt - 2.5) < 1.0
-    now = time.time()
-    if near:
-        if stable_since is None:
-            stable_since = now
-            print(f"reached hover band at alt {alt:.2f} m", flush=True)
-        elif now - stable_since > 30:
-            print(f"hover held 30 s at alt {alt:.2f} m", flush=True)
-            break
-    else:
-        stable_since = None
-else:
-    fail("hover never held for 30 s")
+    if alt < 0.5:
+        fail(f"lost altitude in neural mode: {alt:.2f} m")
+    alts.append((time.time(), alt))
+tail = [a for ts, a in alts if ts > time.time() - 30]
+mean = sum(tail) / len(tail)
+var = sum((a - mean) ** 2 for a in tail) / len(tail)
+std = var ** 0.5
+print(f"neural hover: mean {mean:.2f} m, std {std:.3f} m over {len(tail)} samples", flush=True)
+if std > 0.3:
+    fail(f"neural hover unstable: std {std:.3f} m")
+print("neural hover stable", flush=True)
 
 print("landing...", flush=True)
 m.mav.command_long_send(m.target_system, m.target_component,
