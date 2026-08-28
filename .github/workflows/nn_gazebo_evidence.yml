@@ -48,6 +48,7 @@ jobs:
           export HEADLESS=1
           export PX4_SYS_AUTOSTART=4001
           export PX4_SIM_MODEL=gz_x500
+          export PX4_PARAM_SDLOG_PROFILE=163
           cd build/px4_sitl_neural
           ./bin/px4 -d > ../../sitl_console.log 2>&1 &
           cd ../..
