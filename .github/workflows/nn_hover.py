@@ -27,6 +27,11 @@ threading.Thread(target=gcs_heartbeat, daemon=True).start()
 # the neural config has no simulated power module: disable the supply check
 m.mav.param_set_send(m.target_system, m.target_component, b"COM_POWER_COUNT",
                      0.0, mavutil.mavlink.MAV_PARAM_TYPE_INT32)
+time.sleep(0.2)
+
+# log the debug profile too: the neural_control topic lives there
+m.mav.param_set_send(m.target_system, m.target_component, b"SDLOG_PROFILE",
+                     33.0, mavutil.mavlink.MAV_PARAM_TYPE_INT32)
 
 # enable the neural controller before flight
 m.mav.param_set_send(m.target_system, m.target_component, b"MC_NN_EN",
