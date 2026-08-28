@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CI evidence flight: hover the x500 in headless gz with MC_NN_EN=1."""
 import sys
+import threading
 import time
 from pymavlink import mavutil
 
@@ -13,6 +14,19 @@ print("waiting for heartbeat...", flush=True)
 if not m.wait_heartbeat(timeout=300):
     fail("no heartbeat within 300 s")
 print(f"heartbeat from system {m.target_system}", flush=True)
+
+# behave like a ground station: PX4's preflight checks require a live GCS link
+def gcs_heartbeat():
+    while True:
+        m.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_GCS,
+                             mavutil.mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
+        time.sleep(1)
+
+threading.Thread(target=gcs_heartbeat, daemon=True).start()
+
+# the neural config has no simulated power module: disable the supply check
+m.mav.param_set_send(m.target_system, m.target_component, b"COM_POWER_COUNT",
+                     0.0, mavutil.mavlink.MAV_PARAM_TYPE_INT32)
 
 # enable the neural controller before flight
 m.mav.param_set_send(m.target_system, m.target_component, b"MC_NN_EN",
