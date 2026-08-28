@@ -29,11 +29,21 @@ jobs:
       - name: Install flight dependencies
         run: pip3 install --break-system-packages pymavlink pyulog || pip3 install pymavlink pyulog
 
+      - name: Gazebo diagnostics
+        shell: bash
+        run: |
+          which gz || echo "gz missing"
+          gz sim --versions || true
+
       - name: Fly headless gazebo hover with the NN controller
         shell: bash
         run: |
           export HEADLESS=1
-          make px4_sitl_neural gz_x500 > sitl_console.log 2>&1 &
+          export PX4_SYS_AUTOSTART=4001
+          export PX4_SIM_MODEL=gz_x500
+          cd build/px4_sitl_neural
+          ./bin/px4 -d > ../../sitl_console.log 2>&1 &
+          cd ../..
           python3 .github/workflows/nn_hover.py
 
       - name: Collect flight log
