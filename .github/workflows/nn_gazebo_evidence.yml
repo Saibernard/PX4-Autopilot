@@ -1,0 +1,84 @@
+name: NN Control Gazebo Evidence
+
+on:
+  push:
+    branches:
+      - nn-evidence-final
+  workflow_dispatch:
+
+jobs:
+  hover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: px4io/px4-dev:v1.16.0-rc1-258-g0369abd556
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
+    env:
+      PX4_SBOM_DISABLE: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure Git Safe Directory
+        run: git config --system --add safe.directory '*'
+
+      - name: Install gazebo runtime
+        shell: bash
+        run: |
+          if ! which gz; then
+            apt-get update
+            apt-get install -y curl lsb-release gnupg
+            curl -sSL https://packages.osrfoundation.org/gazebo.gpg -o /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" > /etc/apt/sources.list.d/gazebo-stable.list
+            apt-get update
+            apt-get install -y gz-harmonic libopencv-dev
+          fi
+          gz sim --versions
+
+      - name: Build neural SITL
+        run: make px4_sitl_neural
+
+      - name: Install flight dependencies
+        run: pip3 install --break-system-packages pymavlink pyulog || pip3 install pymavlink pyulog
+
+      - name: Fly headless gazebo hover with the NN controller
+        shell: bash
+        run: |
+          export HEADLESS=1
+          export PX4_SYS_AUTOSTART=4001
+          export PX4_SIM_MODEL=gz_x500
+          export PX4_PARAM_SDLOG_PROFILE=163
+          cd build/px4_sitl_neural
+          ./bin/px4 -d > ../../sitl_console.log 2>&1 &
+          cd ../..
+          python3 .github/workflows/nn_hover.py
+
+      - name: Collect flight log
+        if: always()
+        shell: bash
+        run: |
+          tail -50 sitl_console.log || true
+          ULG=$(find build/px4_sitl_neural -name "*.ulg" | head -1)
+          echo "ulog: $ULG"
+          if [ -n "$ULG" ]; then
+            cp "$ULG" nn_hover.ulg
+            python3 -c "
+          from pyulog import ULog
+          u = ULog('nn_hover.ulg')
+          p = u.initial_parameters
+          print('MC_NN_EN in log:', p.get('MC_NN_EN'))
+          names = {d.name for d in u.data_list}
+          print('neural_control topic in log:', 'neural_control' in names)
+          print('topics:', sorted(names))
+          "
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nn-hover-evidence
+          path: |
+            nn_hover.ulg
+            sitl_console.log
+          if-no-files-found: warn
