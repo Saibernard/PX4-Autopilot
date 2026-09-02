@@ -43,6 +43,7 @@ px4_add_module(
 		mc_nn_control.cpp
 		mc_nn_control.hpp
 		actions_rescale.hpp
+		nn_control_checks.hpp
 		control_net.cpp
 		control_net.hpp
 	MODULE_CONFIG
@@ -57,3 +58,4 @@ target_include_directories(mc_nn_control PRIVATE
 	${CMAKE_SOURCE_DIR}/src/lib/tensorflow_lite_micro)
 
 px4_add_unit_gtest(SRC RescaleActionTest.cpp)
+px4_add_unit_gtest(SRC NnControlChecksTest.cpp)
