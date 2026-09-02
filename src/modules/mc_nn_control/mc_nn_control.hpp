@@ -115,6 +115,8 @@ private:
 	void RescaleActions();
 	int InitializeNetwork();
 	void UpdateMotorLimits();
+	void CheckObservations();
+	void HoldLastCommand();
 	void ReportInvalidLimits();
 	void ReportActionRange();
 	int32_t GetTime();
@@ -156,6 +158,20 @@ private:
 	// set has been copied and gates the controller.
 	bool _motor_limits_valid{false};
 	bool _mapping_valid{false};
+
+	// Why the network is not being run on the current observations, checked every
+	// cycle so the arming check reply always describes the current state
+	nn_control::ObservationFault _observation_fault{nn_control::ObservationFault::PositionInvalid};
+	nn_control::ObservationFault _reported_observation_fault{nn_control::ObservationFault::None};
+
+	// A network that produced a non finite output is not trusted again until the
+	// mode is left
+	bool _output_fault{false};
+
+	// The last command that reached the motors, held while the commander leaves the
+	// mode after a fault
+	float _last_command[4] {};
+	bool _have_last_command{false};
 	hrt_abstime _last_invalid_limits_report{0};
 	float _mapping_thrust_coeff{0.f};
 	float _mapping_min_rpm{0.f};
