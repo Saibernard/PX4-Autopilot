@@ -204,11 +204,36 @@ int MulticopterNeuralNetworkControl::InitializeNetwork()
 	}
 
 	_input_tensor = _interpreter->input(0);
+	TfLiteTensor *output_tensor = _interpreter->output(0);
 
-	if (_input_tensor == nullptr) {
-		PX4_ERR("Input tensor is null");
+	if ((_input_tensor == nullptr) || (output_tensor == nullptr)) {
+		PX4_ERR("model has no input or output tensor");
 		delete _interpreter;
 		_interpreter = nullptr;
+		return -1;
+	}
+
+	// The documentation tells users to swap the model array, so check that what was
+	// loaded is the shape this module feeds and reads
+	auto element_count = [](const TfLiteTensor * tensor) {
+		int count = 1;
+
+		for (int i = 0; i < tensor->dims->size; i++) {
+			count *= tensor->dims->data[i];
+		}
+
+		return count;
+	};
+
+	const char *problem = nn_control::model_layout_problem(control_model->version(), TFLITE_SCHEMA_VERSION,
+			      element_count(_input_tensor), _input_tensor->type == kTfLiteFloat32,
+			      element_count(output_tensor), output_tensor->type == kTfLiteFloat32);
+
+	if (problem != nullptr) {
+		PX4_ERR("model rejected: %s", problem);
+		delete _interpreter;
+		_interpreter = nullptr;
+		_input_tensor = nullptr;
 		return -1;
 	}
 

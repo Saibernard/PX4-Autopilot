@@ -40,6 +40,9 @@ You will then have to modify the `control_net.hpp` and `control_net.cpp` to incl
 - Take the size of the network in the bottom of the `.cc` file and replace the size in `control_net.hpp`.
 - Take the data in the model array in the `cc` file, and replace the ones in `control_net.cpp`.
 
+The module checks the model when it starts: the schema version, a 15 element float input and a 4 element float output.
+A model that does not match is rejected with an error and the module does not start.
+
 You are now ready to run your own network.
 
 ## Code Explanation
